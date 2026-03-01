@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cookie Monster Challenge</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1322;
+      --text: #e8edf7;
+      --accent: #7ee787;
+      --panel: rgba(22, 27, 47, 0.92);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top, #1a2142, var(--bg));
+      overflow: hidden;
+    }
+    .hud {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--panel);
+      border: 1px solid #2f3b63;
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      z-index: 20;
+      backdrop-filter: blur(6px);
+    }
+    .counter { font-weight: 700; color: var(--accent); }
+    .status { opacity: 0.9; }
+    .timer { font-weight: 700; color: #ffd580; min-width: 70px; text-align: right; }
+    .btn {
+      border: 1px solid #3d4a77;
+      background: #1f2743;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .btn:hover { background: #293359; }
+    #playfield {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    .monster-wrap {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 230px;
+      height: 230px;
+      z-index: 10;
+      pointer-events: none;
+      display: grid;
+      place-items: center;
+    }
+    #monster {
+      pointer-events: auto;
+      width: 100%;
+      height: 100%;
+      border: 2px dashed #7fb5ff;
+      border-radius: 24px;
+      background: rgba(22, 39, 82, 0.4);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      user-select: none;
+      padding: 6px;
+    }
+    #monster.ready {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 5px rgba(126, 231, 135, 0.22);
+    }
+    #monsterCount {
+      margin-top: 6px;
+      font-size: 0.95rem;
+      color: var(--accent);
+      text-align: center;
+    }
+    #monsterSvg {
+      width: 170px;
+      height: 150px;
+      display: block;
+    }
+    .cookie {
+      position: absolute;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      border: 1px solid #7b5d1f;
+      background:
+        radial-gradient(circle at 35% 30%, #f5d389 0 35%, transparent 36%),
+        radial-gradient(circle at 65% 65%, #d99a2a 0 80%, #b07a18 81%);
+      box-shadow: inset -6px -8px 0 rgba(0, 0, 0, 0.12), 0 6px 12px rgba(0, 0, 0, 0.35);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      user-select: none;
+      transition: transform 120ms ease, box-shadow 120ms ease, opacity 180ms ease;
+      z-index: 5;
+    }
+    .cookie::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6f4b15;
+      box-shadow: 12px -6px 0 #6f4b15, -10px 8px 0 #6f4b15, 10px 12px 0 #6f4b15;
+      opacity: 0.85;
+    }
+    .cookie.dragging {
+      transform: scale(1.12);
+      box-shadow: 0 0 0 6px rgba(126, 231, 135, 0.22);
+      z-index: 25;
+      cursor: grabbing;
+    }
+    .cookie.added { opacity: 0; pointer-events: none; }
+
+    .scores {
+      position: fixed;
+      right: 12px;
+      top: 12px;
+      width: 250px;
+      background: var(--panel);
+      border: 1px solid #2f3b63;
+      border-radius: 12px;
+      padding: 10px 12px;
+      z-index: 21;
+      backdrop-filter: blur(6px);
+      font-size: 0.9rem;
+    }
+    .scores h3 { margin: 0 0 8px; font-size: 1rem; }
+    .scores pre {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      white-space: pre-wrap;
+      opacity: 0.92;
+    }
+
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      background: rgba(9, 12, 24, 0.72);
+      backdrop-filter: blur(4px);
+    }
+    .start-panel {
+      display: grid;
+      gap: 12px;
+      justify-items: center;
+      text-align: center;
+    }
+    .start-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .time-row {
+      display: flex;
+      gap: 14px;
+    }
+    .time-btn {
+      width: 220px;
+      height: 220px;
+      border-radius: 22px;
+      border: 2px solid #4b5f99;
+      background: linear-gradient(145deg, #1d2a52, #26386d);
+      color: #e8efff;
+      font-size: 2.1rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+    }
+    .time-btn:hover { transform: translateY(-2px); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="hud">
+    <div class="counter">Cookies Eaten: <span id="count">0</span></div>
+    <div class="status" id="status">Pick a duration to start.</div>
+    <div class="timer" id="timer">0.0s</div>
+    <button class="btn" id="resetBtn" type="button">Reset</button>
+  </div>
+
+  <aside class="scores" aria-live="polite">
+    <h3>Local Scores</h3>
+    <pre id="scoresBoard">No scores yet.</pre>
+  </aside>
+
+  <main id="playfield" aria-label="Cookie game area">
+    <div class="monster-wrap">
+      <button id="monster" type="button" aria-label="Cookie Monster drop zone">
+        <div>
+          <svg id="monsterSvg" viewBox="0 0 220 180" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <ellipse cx="110" cy="95" rx="95" ry="78" fill="#2f7de1" />
+            <circle cx="75" cy="54" r="24" fill="#fff" />
+            <circle cx="145" cy="54" r="24" fill="#fff" />
+            <circle cx="82" cy="58" r="10" fill="#121212" />
+            <circle cx="152" cy="58" r="10" fill="#121212" />
+            <ellipse cx="110" cy="120" rx="56" ry="28" fill="#0e111d" />
+            <circle cx="82" cy="118" r="4" fill="#fff" opacity="0.85" />
+            <circle cx="101" cy="129" r="3" fill="#fff" opacity="0.8" />
+            <circle cx="121" cy="112" r="4" fill="#fff" opacity="0.8" />
+            <circle cx="136" cy="126" r="3" fill="#fff" opacity="0.8" />
+          </svg>
+          <div id="monsterCount">0 cookies eaten</div>
+        </div>
+      </button>
+    </div>
+  </main>
+
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-panel">
+      <div class="start-title">Choose Round Time</div>
+      <div class="time-row">
+        <button class="time-btn" data-seconds="15">15s</button>
+        <button class="time-btn" data-seconds="30">30s</button>
+        <button class="time-btn" data-seconds="45">45s</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const COOKIE_TOTAL = 24;
+    const COOKIE_SIZE = 54;
+    const MONSTER_KEEP_OUT = { w: 310, h: 330 };
+    const SCORE_KEY = "cookieMonsterScoresV2";
+
+    const playfield = document.getElementById("playfield");
+    const monster = document.getElementById("monster");
+    const countEl = document.getElementById("count");
+    const monsterCountEl = document.getElementById("monsterCount");
+    const statusEl = document.getElementById("status");
+    const timerEl = document.getElementById("timer");
+    const resetBtn = document.getElementById("resetBtn");
+    const scoresBoardEl = document.getElementById("scoresBoard");
+    const startOverlay = document.getElementById("startOverlay");
+    const timeButtons = Array.from(document.querySelectorAll(".time-btn"));
+
+    let collected = 0;
+    let draggingCookie = null;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    let gameRunning = false;
+    let durationSec = 0;
+    let remainingMs = 0;
+    let tickId = null;
+    let audioCtx = null;
+
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function setStatus(text) {
+      statusEl.textContent = text;
+    }
+
+    function setTimerDisplay(ms) {
+      timerEl.textContent = `${(ms / 1000).toFixed(1)}s`;
+    }
+
+    function clearCookies() {
+      playfield.querySelectorAll(".cookie").forEach((n) => n.remove());
+    }
+
+    function isInMonsterZone(x, y, width, height) {
+      const cx = width / 2;
+      const cy = height / 2;
+      const left = cx - MONSTER_KEEP_OUT.w / 2;
+      const right = cx + MONSTER_KEEP_OUT.w / 2;
+      const top = cy - MONSTER_KEEP_OUT.h / 2;
+      const bottom = cy + MONSTER_KEEP_OUT.h / 2;
+      return x > left && x < right && y > top && y < bottom;
+    }
+
+    function isOverMonster(cookieEl) {
+      const cRect = cookieEl.getBoundingClientRect();
+      const mRect = monster.getBoundingClientRect();
+      const cx = cRect.left + cRect.width / 2;
+      const cy = cRect.top + cRect.height / 2;
+      return cx >= mRect.left && cx <= mRect.right && cy >= mRect.top && cy <= mRect.bottom;
+    }
+
+    function updateCounter() {
+      countEl.textContent = String(collected);
+      monsterCountEl.textContent = `${collected} cookies eaten`;
+    }
+
+    function loadScores() {
+      try {
+        const raw = localStorage.getItem(SCORE_KEY);
+        if (!raw) return { 15: [], 30: [], 45: [] };
+        const parsed = JSON.parse(raw);
+        return {
+          15: Array.isArray(parsed[15]) ? parsed[15] : [],
+          30: Array.isArray(parsed[30]) ? parsed[30] : [],
+          45: Array.isArray(parsed[45]) ? parsed[45] : [],
+        };
+      } catch {
+        return { 15: [], 30: [], 45: [] };
+      }
+    }
+
+    function saveScores(scores) {
+      localStorage.setItem(SCORE_KEY, JSON.stringify(scores));
+    }
+
+    function renderScores() {
+      const scores = loadScores();
+      const lines = [15, 30, 45].map((sec) => {
+        const arr = scores[sec];
+        if (!arr.length) return `${sec}s: -`;
+        return `${sec}s: ${arr.slice(0, 5).join(", ")}`;
+      });
+      scoresBoardEl.textContent = lines.join("
+");
+    }
+
+    function playEatSound() {
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        const t0 = audioCtx.currentTime;
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = "triangle";
+        osc1.frequency.setValueAtTime(480, t0);
+        osc1.frequency.exponentialRampToValueAtTime(210, t0 + 0.09);
+        gain1.gain.setValueAtTime(0.0001, t0);
+        gain1.gain.exponentialRampToValueAtTime(0.22, t0 + 0.01);
+        gain1.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+        osc1.connect(gain1).connect(audioCtx.destination);
+        osc1.start(t0);
+        osc1.stop(t0 + 0.12);
+
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(260, t0 + 0.05);
+        osc2.frequency.exponentialRampToValueAtTime(150, t0 + 0.17);
+        gain2.gain.setValueAtTime(0.0001, t0 + 0.05);
+        gain2.gain.exponentialRampToValueAtTime(0.14, t0 + 0.07);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+        osc2.connect(gain2).connect(audioCtx.destination);
+        osc2.start(t0 + 0.05);
+        osc2.stop(t0 + 0.19);
+      } catch {
+        // no-op when audio is blocked
+      }
+    }
+
+    function createCookie(index, width, height) {
+      const cookie = document.createElement("button");
+      cookie.type = "button";
+      cookie.className = "cookie";
+      cookie.setAttribute("aria-label", `Cookie ${index + 1}`);
+
+      let x = 0;
+      let y = 0;
+      for (let i = 0; i < 140; i++) {
+        x = randInt(8, width - COOKIE_SIZE - 8);
+        y = randInt(70, height - COOKIE_SIZE - 10);
+        if (!isInMonsterZone(x + COOKIE_SIZE / 2, y + COOKIE_SIZE / 2, width, height)) break;
+      }
+      cookie.style.left = `${x}px`;
+      cookie.style.top = `${y}px`;
+
+      cookie.addEventListener("mousedown", (event) => startDrag(cookie, event));
+      playfield.appendChild(cookie);
+    }
+
+    function resetCookies() {
+      clearCookies();
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      for (let i = 0; i < COOKIE_TOTAL; i++) {
+        createCookie(i, width, height);
+      }
+    }
+
+    function startDrag(cookie, event) {
+      if (!gameRunning) {
+        setStatus("Pick 15/30/45s to start.");
+        return;
+      }
+      if (cookie.classList.contains("added")) return;
+      draggingCookie = cookie;
+      const rect = cookie.getBoundingClientRect();
+      dragOffsetX = event.clientX - rect.left;
+      dragOffsetY = event.clientY - rect.top;
+      cookie.classList.add("dragging");
+      monster.classList.add("ready");
+      setStatus("Dragging... drop on Cookie Monster.");
+      event.preventDefault();
+    }
+
+    function moveDrag(event) {
+      if (!draggingCookie) return;
+      const maxX = window.innerWidth - COOKIE_SIZE - 6;
+      const maxY = window.innerHeight - COOKIE_SIZE - 6;
+      const x = clamp(event.clientX - dragOffsetX, 6, maxX);
+      const y = clamp(event.clientY - dragOffsetY, 64, maxY);
+      draggingCookie.style.left = `${x}px`;
+      draggingCookie.style.top = `${y}px`;
+      event.preventDefault();
+    }
+
+    function endDrag() {
+      if (!draggingCookie) return;
+      const cookie = draggingCookie;
+      draggingCookie = null;
+      cookie.classList.remove("dragging");
+      monster.classList.remove("ready");
+      if (!gameRunning) return;
+
+      if (isOverMonster(cookie)) {
+        cookie.classList.add("added");
+        collected += 1;
+        updateCounter();
+        playEatSound();
+        setStatus("Nom nom! Cookie eaten.");
+      } else {
+        setStatus("Missed. Drop cookie onto Cookie Monster.");
+      }
+    }
+
+    function stopRound(recordScore) {
+      if (tickId) {
+        clearInterval(tickId);
+        tickId = null;
+      }
+      const ended = gameRunning;
+      gameRunning = false;
+      if (recordScore && ended && durationSec) {
+        const scores = loadScores();
+        scores[durationSec].push(collected);
+        scores[durationSec].sort((a, b) => b - a);
+        scores[durationSec] = scores[durationSec].slice(0, 10);
+        saveScores(scores);
+        renderScores();
+        setStatus(`Time! Score: ${collected} cookies in ${durationSec}s.`);
+      }
+      startOverlay.classList.remove("hidden");
+    }
+
+    function startRound(seconds) {
+      durationSec = seconds;
+      collected = 0;
+      updateCounter();
+      resetCookies();
+      gameRunning = true;
+      remainingMs = seconds * 1000;
+      setTimerDisplay(remainingMs);
+      setStatus("Go! Drag cookies to Cookie Monster.");
+      startOverlay.classList.add("hidden");
+
+      const started = performance.now();
+      if (tickId) clearInterval(tickId);
+      tickId = setInterval(() => {
+        const elapsed = performance.now() - started;
+        remainingMs = Math.max(0, seconds * 1000 - elapsed);
+        setTimerDisplay(remainingMs);
+        if (remainingMs <= 0) {
+          stopRound(true);
+        }
+      }, 50);
+    }
+
+    timeButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sec = Number(btn.dataset.seconds);
+        startRound(sec);
+      });
+    });
+
+    resetBtn.addEventListener("click", () => {
+      stopRound(false);
+      collected = 0;
+      updateCounter();
+      setTimerDisplay(0);
+      setStatus("Pick 15/30/45s to start.");
+      resetCookies();
+    });
+
+    monster.addEventListener("click", () => {
+      if (!gameRunning) {
+        setStatus("Pick a time button in the center to start.");
+      }
+    });
+
+    window.addEventListener("mousemove", moveDrag);
+    window.addEventListener("mouseup", endDrag);
+    window.addEventListener("resize", () => {
+      resetCookies();
+    });
+
+    renderScores();
+    updateCounter();
+    setTimerDisplay(0);
+    setStatus("Pick 15/30/45s to start.");
+    resetCookies();
+  </script>
+</body>
+</html>
