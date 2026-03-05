@@ -43,7 +43,8 @@ MODEL_URL = (
 
 def announce_select():
     try:
-        subprocess.Popen(["say", "select"])
+        # Use a short system click-like sound instead of speech.
+        subprocess.Popen(["afplay", "/System/Library/Sounds/Tink.aiff"])
     except Exception:
         print("\a", end="", flush=True)
 

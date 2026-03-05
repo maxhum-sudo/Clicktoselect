@@ -329,8 +329,7 @@
         if (!arr.length) return `${sec}s: -`;
         return `${sec}s: ${arr.slice(0, 5).join(", ")}`;
       });
-      scoresBoardEl.textContent = lines.join("
-");
+      scoresBoardEl.textContent = lines.join("\\n");
     }
 
     function playEatSound() {
