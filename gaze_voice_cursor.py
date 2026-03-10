@@ -24,10 +24,14 @@ pyautogui.FAILSAFE = False
 pyautogui.PAUSE = 0.02
 
 SMOOTHING = 0.65
-HAND_ZONE_MARGIN = 0.08
+# Map center 70% of camera view to full screen (less hand travel to reach edges)
+HAND_ZONE_MIN = 0.15
+HAND_ZONE_MAX = 0.85
 CLICK_COOLDOWN = 0.8
 PINCH_CLOSE = 0.045
 PINCH_OPEN = 0.065
+# Freeze cursor when fingers are this close (avoids jump during pinch)
+PINCH_FREEZE = 0.08
 
 MIC_RATE = 16000
 MIC_CHUNK = 1024
@@ -54,9 +58,9 @@ def get_screen_size() -> tuple[int, int]:
 
 
 def hand_to_screen(norm_x: float, norm_y: float, screen_width: int, screen_height: int) -> tuple[int, int]:
-    margin = HAND_ZONE_MARGIN
-    x = margin + norm_x * (1 - 2 * margin)
-    y = margin + norm_y * (1 - 2 * margin)
+    zone_w = HAND_ZONE_MAX - HAND_ZONE_MIN
+    x = (norm_x - HAND_ZONE_MIN) / zone_w
+    y = (norm_y - HAND_ZONE_MIN) / zone_w
     x = max(0.0, min(1.0, x))
     y = max(0.0, min(1.0, y))
     return int(x * screen_width), int(y * screen_height)
@@ -151,13 +155,14 @@ def main():
                     index_tip = lm[8]
                     thumb_tip = lm[4]
 
-                    raw_x, raw_y = index_tip.x, index_tip.y
-                    smooth_x = SMOOTHING * smooth_x + (1 - SMOOTHING) * raw_x
-                    smooth_y = SMOOTHING * smooth_y + (1 - SMOOTHING) * raw_y
+                    pinch_dist = math.hypot(index_tip.x - thumb_tip.x, index_tip.y - thumb_tip.y)
+                    # Freeze cursor only when entering pinch (avoids jump on click); allow movement during drag
+                    if pinch_dist > PINCH_FREEZE or pinch_down:
+                        raw_x, raw_y = index_tip.x, index_tip.y
+                        smooth_x = SMOOTHING * smooth_x + (1 - SMOOTHING) * raw_x
+                        smooth_y = SMOOTHING * smooth_y + (1 - SMOOTHING) * raw_y
                     sx, sy = hand_to_screen(smooth_x, smooth_y, screen_width, screen_height)
                     pyautogui.moveTo(sx, sy, _pause=False)
-
-                    pinch_dist = math.hypot(index_tip.x - thumb_tip.x, index_tip.y - thumb_tip.y)
                     now = time.monotonic()
                     if (not pinch_down) and pinch_dist < PINCH_CLOSE:
                         pyautogui.mouseDown()
@@ -174,7 +179,12 @@ def main():
 
                     cv2.circle(frame, (int(index_tip.x * w), int(index_tip.y * h)), 6, (0, 255, 0), -1)
                     cv2.circle(frame, (int(thumb_tip.x * w), int(thumb_tip.y * h)), 6, (255, 180, 0), -1)
-                    status = "PINCH=CLICK" if pinch_down else "OPEN=MOVE"
+                    if pinch_down:
+                        status = "DRAG (move to drag)"
+                    elif pinch_dist < PINCH_FREEZE:
+                        status = "LOCKED (click)"
+                    else:
+                        status = "OPEN=MOVE"
                     cv2.putText(frame, status, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50, 240, 50), 2)
                     cv2.putText(
                         frame,
